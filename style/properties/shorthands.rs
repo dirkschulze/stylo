@@ -10,8 +10,8 @@ use crate::values::specified;
 use cssparser::Parser;
 use std::fmt::{self, Write};
 use style_traits::{
-    values::SequenceWriter, CssWriter, KeywordsCollectFn, ParseError, SpecifiedValueInfo,
-    StyleParseErrorKind, ToCss,
+    CssWriter, KeywordsCollectFn, ParseError, SpecifiedValueInfo, StyleParseErrorKind, ToCss,
+    values::SequenceWriter,
 };
 
 macro_rules! expanded {
@@ -86,16 +86,16 @@ where
     Ok(())
 }
 
-pub fn parse_border<'i, 't>(
+pub fn parse_border(
     context: &ParserContext,
-    input: &mut Parser<'i, 't>,
+    input: &mut Parser,
 ) -> Result<
     (
         specified::BorderSideWidth,
         specified::BorderStyle,
         specified::Color,
     ),
-    ParseError<'i>,
+    ParseError,
 > {
     use crate::values::specified::{BorderSideWidth, BorderStyle, Color};
     let mut color = None;
@@ -111,7 +111,7 @@ pub fn parse_border<'i, 't>(
         break;
     }
     if parsed == 0 {
-        return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+        return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
     }
     Ok((
         width.unwrap_or(BorderSideWidth::medium()),
@@ -124,14 +124,14 @@ pub mod border_block {
     use super::*;
     pub use crate::properties::generated::shorthands::border_block::*;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let (width, style, color) = super::parse_border(context, input)?;
         Ok(Longhands {
             border_block_start_width: width.clone(),
-            border_block_start_style: style.clone(),
+            border_block_start_style: style,
             border_block_start_color: color.clone(),
             border_block_end_width: width,
             border_block_end_style: style,
@@ -147,9 +147,9 @@ pub mod border_block {
             // FIXME: Should serialize empty if start != end, right?
             super::serialize_directional_border(
                 dest,
-                &self.border_block_start_width,
-                &self.border_block_start_style,
-                &self.border_block_start_color,
+                self.border_block_start_width,
+                self.border_block_start_style,
+                self.border_block_start_color,
             )
         }
     }
@@ -159,14 +159,14 @@ pub mod border_inline {
     use super::*;
     pub use crate::properties::generated::shorthands::border_inline::*;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let (width, style, color) = super::parse_border(context, input)?;
         Ok(Longhands {
             border_inline_start_width: width.clone(),
-            border_inline_start_style: style.clone(),
+            border_inline_start_style: style,
             border_inline_start_color: color.clone(),
             border_inline_end_width: width,
             border_inline_end_style: style,
@@ -182,9 +182,9 @@ pub mod border_inline {
             // FIXME: Should serialize empty if start != end, right?
             super::serialize_directional_border(
                 dest,
-                &self.border_inline_start_width,
-                &self.border_inline_start_style,
-                &self.border_inline_start_color,
+                self.border_inline_start_width,
+                self.border_inline_start_style,
+                self.border_inline_start_color,
             )
         }
     }
@@ -198,10 +198,10 @@ pub mod border_radius {
     use crate::values::generics::rect::Rect;
     use crate::values::specified::BorderRadius;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let radii = BorderRadius::parse(context, input)?;
         Ok(expanded! {
             border_top_left_radius: radii.top_left,
@@ -217,10 +217,10 @@ pub mod border_radius {
             W: fmt::Write,
         {
             let LonghandsToSerialize {
-                border_top_left_radius: &BorderCornerRadius(ref tl),
-                border_top_right_radius: &BorderCornerRadius(ref tr),
-                border_bottom_right_radius: &BorderCornerRadius(ref br),
-                border_bottom_left_radius: &BorderCornerRadius(ref bl),
+                border_top_left_radius: BorderCornerRadius(tl),
+                border_top_right_radius: BorderCornerRadius(tr),
+                border_bottom_right_radius: BorderCornerRadius(br),
+                border_bottom_left_radius: BorderCornerRadius(bl),
             } = *self;
 
             let widths = Rect::new(tl.width(), tr.width(), br.width(), bl.width());
@@ -240,10 +240,10 @@ pub mod corner_shape {
 
     /// Parses 1-4 `<corner-shape-value>` tokens with the standard CSS 4-side
     /// shorthand expansion (top, right, bottom, left).
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let rect = Rect::parse_with(context, input, CornerShape::parse)?;
         Ok(expanded! {
             corner_top_left_shape: rect.0,
@@ -278,10 +278,10 @@ pub mod border_image {
         border_image_width,
     };
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut outset = border_image_outset::get_initial_specified_value();
         let mut repeat = border_image_repeat::get_initial_specified_value();
         let mut slice = border_image_slice::get_initial_specified_value();
@@ -292,71 +292,66 @@ pub mod border_image {
         let mut parsed_source = false;
         let mut parsed_repeat = false;
         loop {
-            if !parsed_slice {
-                if let Ok(value) =
+            if !parsed_slice
+                && let Ok(value) =
                     input.try_parse(|input| border_image_slice::parse(context, input))
-                {
-                    parsed_slice = true;
-                    any = true;
-                    slice = value;
-                    // Parse border image width and outset, if applicable.
-                    let maybe_width_outset: Result<_, ParseError> = input.try_parse(|input| {
-                        input.expect_delim('/')?;
+            {
+                parsed_slice = true;
+                any = true;
+                slice = value;
+                // Parse border image width and outset, if applicable.
+                let maybe_width_outset: Result<_, ParseError> = input.try_parse(|input| {
+                    input.expect_delim('/')?;
 
-                        // Parse border image width, if applicable.
-                        let w = input
-                            .try_parse(|input| border_image_width::parse(context, input))
-                            .ok();
+                    // Parse border image width, if applicable.
+                    let w = input
+                        .try_parse(|input| border_image_width::parse(context, input))
+                        .ok();
 
-                        // Parse border image outset if applicable.
-                        let o = input
-                            .try_parse(|input| {
-                                input.expect_delim('/')?;
-                                border_image_outset::parse(context, input)
-                            })
-                            .ok();
-                        if w.is_none() && o.is_none() {
-                            return Err(
-                                input.new_custom_error(StyleParseErrorKind::UnspecifiedError)
-                            );
-                        }
-                        Ok((w, o))
-                    });
-                    if let Ok((w, o)) = maybe_width_outset {
-                        if let Some(w) = w {
-                            width = w;
-                        }
-                        if let Some(o) = o {
-                            outset = o;
-                        }
+                    // Parse border image outset if applicable.
+                    let o = input
+                        .try_parse(|input| {
+                            input.expect_delim('/')?;
+                            border_image_outset::parse(context, input)
+                        })
+                        .ok();
+                    if w.is_none() && o.is_none() {
+                        return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
                     }
-                    continue;
+                    Ok((w, o))
+                });
+                if let Ok((w, o)) = maybe_width_outset {
+                    if let Some(w) = w {
+                        width = w;
+                    }
+                    if let Some(o) = o {
+                        outset = o;
+                    }
                 }
+                continue;
             }
-            if !parsed_source {
-                if let Ok(value) =
+            if !parsed_source
+                && let Ok(value) =
                     input.try_parse(|input| border_image_source::parse(context, input))
-                {
-                    source = value;
-                    parsed_source = true;
-                    any = true;
-                    continue;
-                }
+            {
+                source = value;
+                parsed_source = true;
+                any = true;
+                continue;
             }
-            if !parsed_repeat {
-                if let Ok(value) =
+            if !parsed_repeat
+                && let Ok(value) =
                     input.try_parse(|input| border_image_repeat::parse(context, input))
-                {
-                    repeat = value;
-                    parsed_repeat = true;
-                    any = true;
-                    continue;
-                }
+            {
+                repeat = value;
+                parsed_repeat = true;
+                any = true;
+                continue;
             }
             break;
         }
         if !any {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
            border_image_outset: outset,
@@ -433,10 +428,10 @@ pub mod border {
         border_image_width,
     };
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let (width, style, color) = super::parse_border(context, input)?;
         Ok(expanded! {
             border_top_width: width.clone(),
@@ -554,10 +549,10 @@ pub mod container {
 
     use crate::values::specified::{ContainerName, ContainerType};
 
-    pub fn parse_value<'i>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         // See https://github.com/w3c/csswg-drafts/issues/7180 for why we don't match the spec.
         let container_name = ContainerName::parse(context, input)?;
         let container_type = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
@@ -592,10 +587,10 @@ pub mod vertical_align {
 
     use crate::values::specified::{AlignmentBaseline, BaselineShift, BaselineSource};
 
-    pub fn parse_value<'i>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut baseline_source = None;
         let mut alignment_baseline = None;
         let mut baseline_shift = None;
@@ -613,7 +608,7 @@ pub mod vertical_align {
         }
 
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         Ok(expanded! {
@@ -647,102 +642,25 @@ pub mod vertical_align {
 }
 
 #[cfg(feature = "gecko")]
-pub mod page_break_before {
-    use super::*;
-    pub use crate::properties::generated::shorthands::page_break_before::*;
-
-    use crate::values::specified::BreakBetween;
-
-    pub fn parse_value<'i>(
-        context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
-        Ok(expanded! {
-            break_before: BreakBetween::parse_legacy(context, input)?,
-        })
-    }
-
-    impl<'a> ToCss for LonghandsToSerialize<'a> {
-        fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-        where
-            W: fmt::Write,
-        {
-            self.break_before.to_css_legacy(dest)
-        }
-    }
-}
-
-#[cfg(feature = "gecko")]
-pub mod page_break_after {
-    pub use crate::properties::generated::shorthands::page_break_after::*;
-
-    use super::*;
-    use crate::values::specified::BreakBetween;
-
-    pub fn parse_value<'i>(
-        context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
-        Ok(expanded! {
-            break_after: BreakBetween::parse_legacy(context, input)?,
-        })
-    }
-
-    impl<'a> ToCss for LonghandsToSerialize<'a> {
-        fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-        where
-            W: fmt::Write,
-        {
-            self.break_after.to_css_legacy(dest)
-        }
-    }
-}
-
-#[cfg(feature = "gecko")]
-pub mod page_break_inside {
-    use super::*;
-    pub use crate::properties::generated::shorthands::page_break_inside::*;
-    use crate::values::specified::BreakWithin;
-
-    pub fn parse_value<'i>(
-        context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
-        Ok(expanded! {
-            break_inside: BreakWithin::parse_legacy(context, input)?,
-        })
-    }
-
-    impl<'a> ToCss for LonghandsToSerialize<'a> {
-        fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-        where
-            W: fmt::Write,
-        {
-            self.break_inside.to_css_legacy(dest)
-        }
-    }
-}
-
-#[cfg(feature = "gecko")]
 pub mod offset {
     use super::*;
+    use crate::Zero;
     pub use crate::properties::generated::shorthands::offset::*;
     use crate::values::specified::{
         LengthPercentage, OffsetPath, OffsetPosition, OffsetRotate, PositionOrAuto,
     };
-    use crate::Zero;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let offset_position = input.try_parse(|i| OffsetPosition::parse(context, i)).ok();
         let offset_path = input.try_parse(|i| OffsetPath::parse(context, i)).ok();
 
         // Must have one of [offset-position, offset-path].
         // FIXME: The syntax is out-of-date after the update of the spec.
         if offset_position.is_none() && offset_path.is_none() {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         let mut offset_distance = None;
@@ -750,17 +668,17 @@ pub mod offset {
         // offset-distance and offset-rotate are grouped with offset-path.
         if offset_path.is_some() {
             loop {
-                if offset_distance.is_none() {
-                    if let Ok(value) = input.try_parse(|i| LengthPercentage::parse(context, i)) {
-                        offset_distance = Some(value);
-                    }
+                if offset_distance.is_none()
+                    && let Ok(value) = input.try_parse(|i| LengthPercentage::parse(context, i))
+                {
+                    offset_distance = Some(value);
                 }
 
-                if offset_rotate.is_none() {
-                    if let Ok(value) = input.try_parse(|i| OffsetRotate::parse(context, i)) {
-                        offset_rotate = Some(value);
-                        continue;
-                    }
+                if offset_rotate.is_none()
+                    && let Ok(value) = input.try_parse(|i| OffsetRotate::parse(context, i))
+                {
+                    offset_rotate = Some(value);
+                    continue;
                 }
                 break;
             }
@@ -822,59 +740,16 @@ pub mod offset {
     }
 }
 
-pub mod _webkit_perspective {
-    pub use crate::properties::generated::shorthands::_webkit_perspective::*;
-
-    use super::*;
-
-    pub fn parse_value<'i, 't>(
-        context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
-        use crate::properties::longhands::perspective;
-        use crate::values::generics::NonNegative;
-        use crate::values::specified::{AllowQuirks, Length, Perspective};
-
-        if let Ok(l) = input.try_parse(|input| {
-            Length::parse_non_negative_quirky(context, input, AllowQuirks::Always)
-        }) {
-            Ok(expanded! {
-                perspective: Perspective::Length(NonNegative(l)),
-            })
-        } else {
-            Ok(expanded! {
-                perspective: perspective::parse(context, input)?
-            })
-        }
-    }
-}
-
-pub mod _webkit_transform {
-    pub use crate::properties::generated::shorthands::_webkit_transform::*;
-
-    use super::*;
-
-    pub fn parse_value<'i, 't>(
-        context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
-        use crate::values::specified::Transform;
-        Ok(expanded! {
-            transform: Transform::parse_legacy(context, input)?,
-        })
-    }
-}
-
 pub mod columns {
     pub use crate::properties::generated::shorthands::columns::*;
 
     use super::*;
     use crate::properties::longhands::{column_count, column_width};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut column_count = None;
         let mut column_width = None;
         let mut autos = 0;
@@ -889,18 +764,18 @@ pub mod columns {
                 continue;
             }
 
-            if column_count.is_none() {
-                if let Ok(value) = input.try_parse(|input| column_count::parse(context, input)) {
-                    column_count = Some(value);
-                    continue;
-                }
+            if column_count.is_none()
+                && let Ok(value) = input.try_parse(|input| column_count::parse(context, input))
+            {
+                column_count = Some(value);
+                continue;
             }
 
-            if column_width.is_none() {
-                if let Ok(value) = input.try_parse(|input| column_width::parse(context, input)) {
-                    column_width = Some(value);
-                    continue;
-                }
+            if column_width.is_none()
+                && let Ok(value) = input.try_parse(|input| column_width::parse(context, input))
+            {
+                column_width = Some(value);
+                continue;
             }
 
             break;
@@ -908,7 +783,7 @@ pub mod columns {
 
         let values = autos + column_count.iter().len() + column_width.iter().len();
         if values == 0 || values > 2 {
-            Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError))
+            Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError))
         } else {
             Ok(expanded! {
                 column_count: unwrap_or_initial!(column_count),
@@ -943,10 +818,10 @@ pub mod column_rule {
     use crate::properties::longhands::column_rule_color;
     use crate::properties::longhands::{column_rule_style, column_rule_width};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut column_rule_width = None;
         let mut column_rule_style = None;
         let mut column_rule_color = None;
@@ -960,7 +835,7 @@ pub mod column_rule {
             break;
         }
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             column_rule_width: unwrap_or_initial!(column_rule_width),
@@ -977,10 +852,10 @@ pub mod text_wrap {
     use super::*;
     use crate::properties::longhands::{text_wrap_mode, text_wrap_style};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut mode = None;
         let mut style = None;
         let mut parsed = 0;
@@ -992,7 +867,7 @@ pub mod text_wrap {
             break;
         }
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             text_wrap_mode: unwrap_or_initial!(text_wrap_mode, mode),
@@ -1028,16 +903,14 @@ pub mod white_space {
     use super::*;
     use crate::properties::longhands::{text_wrap_mode, white_space_collapse};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         use text_wrap_mode::computed_value::T as Wrap;
         use white_space_collapse::computed_value::T as Collapse;
 
-        fn parse_special_shorthands<'i, 't>(
-            input: &mut Parser<'i, 't>,
-        ) -> Result<Longhands, ParseError<'i>> {
+        fn parse_special_shorthands(input: &mut Parser) -> Result<Longhands, ParseError> {
             let (mode, collapse) = try_match_ident_ignore_ascii_case! { input,
                 "normal" => (Wrap::Wrap, Collapse::Collapse),
                 "pre" => (Wrap::Nowrap, Collapse::Preserve),
@@ -1067,7 +940,7 @@ pub mod white_space {
         }
 
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         Ok(expanded! {
@@ -1135,10 +1008,10 @@ pub mod _webkit_text_stroke {
     use super::*;
     use crate::properties::longhands::{_webkit_text_stroke_color, _webkit_text_stroke_width};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut color = None;
         let mut width = None;
         let mut parsed = 0;
@@ -1150,7 +1023,7 @@ pub mod _webkit_text_stroke {
             break;
         }
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             _webkit_text_stroke_color: unwrap_or_initial!(_webkit_text_stroke_color, color),
@@ -1167,10 +1040,10 @@ pub mod list_style {
     use crate::values::specified::Image;
     use selectors::parser::SelectorParseErrorKind;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         // `none` is ambiguous until we've finished parsing the shorthands, so we count the number
         // of times we see it.
         let mut nones = 0u8;
@@ -1185,8 +1058,7 @@ pub mod list_style {
             {
                 nones += 1;
                 if nones > 2 {
-                    return Err(input
-                        .new_custom_error(SelectorParseErrorKind::UnexpectedIdent("none".into())));
+                    return Err(ParseError::custom(SelectorParseErrorKind::UnexpectedIdent));
                 }
                 continue;
             }
@@ -1205,7 +1077,7 @@ pub mod list_style {
         let position = unwrap_or_initial!(list_style_position, position);
 
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         // If there are two `none`s, then we can't have a type or image; if there is one `none`,
@@ -1238,7 +1110,7 @@ pub mod list_style {
                 list_style_image: unwrap_or_initial!(list_style_image, image),
                 list_style_type: unwrap_or_initial!(list_style_type),
             }),
-            _ => Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError)),
+            _ => Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError)),
         }
     }
 
@@ -1252,7 +1124,9 @@ pub mod list_style {
             use list_style_type::SpecifiedValue as ListStyleType;
 
             let mut writer = SequenceWriter::new(dest, " ");
-            if *self.list_style_position != ListStylePosition::Outside {
+            if *self.list_style_position != ListStylePosition::Outside
+                || self.list_style_type.is_name(&atom!("outside"))
+            {
                 writer.item(self.list_style_position)?;
             }
             if *self.list_style_image != ListStyleImage::None {
@@ -1275,10 +1149,10 @@ pub mod gap {
     use super::*;
     use crate::properties::longhands::{column_gap, row_gap};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let r_gap = row_gap::parse(context, input)?;
         let c_gap = input
             .try_parse(|input| column_gap::parse(context, input))
@@ -1311,10 +1185,10 @@ pub mod marker {
     use super::*;
     use crate::values::specified::url::UrlOrNone;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let url = UrlOrNone::parse(context, input)?;
 
         Ok(expanded! {
@@ -1344,10 +1218,10 @@ pub mod flex_flow {
     use super::*;
     use crate::properties::longhands::{flex_direction, flex_wrap};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut parsed = 0;
         let mut direction = None;
         let mut wrap = None;
@@ -1359,7 +1233,7 @@ pub mod flex_flow {
             break;
         }
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             flex_direction: unwrap_or_initial!(flex_direction, direction),
@@ -1394,10 +1268,10 @@ pub mod flex {
     use crate::properties::longhands::flex_basis::SpecifiedValue as FlexBasis;
     use crate::values::specified::NonNegativeNumber;
 
-    fn parse_flexibility<'i, 't>(
+    fn parse_flexibility(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<(NonNegativeNumber, Option<NonNegativeNumber>), ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<(NonNegativeNumber, Option<NonNegativeNumber>), ParseError> {
         let grow = NonNegativeNumber::parse(context, input)?;
         let shrink = input
             .try_parse(|i| NonNegativeNumber::parse(context, i))
@@ -1405,10 +1279,10 @@ pub mod flex {
         Ok((grow, shrink))
     }
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut grow = None;
         let mut shrink = None;
         let mut basis = None;
@@ -1424,26 +1298,25 @@ pub mod flex {
             });
         }
         loop {
-            if grow.is_none() {
-                if let Ok((flex_grow, flex_shrink)) =
+            if grow.is_none()
+                && let Ok((flex_grow, flex_shrink)) =
                     input.try_parse(|i| parse_flexibility(context, i))
-                {
-                    grow = Some(flex_grow);
-                    shrink = flex_shrink;
-                    continue;
-                }
+            {
+                grow = Some(flex_grow);
+                shrink = flex_shrink;
+                continue;
             }
-            if basis.is_none() {
-                if let Ok(value) = input.try_parse(|input| FlexBasis::parse(context, input)) {
-                    basis = Some(value);
-                    continue;
-                }
+            if basis.is_none()
+                && let Ok(value) = input.try_parse(|input| FlexBasis::parse(context, input))
+            {
+                basis = Some(value);
+                continue;
             }
             break;
         }
 
         if grow.is_none() && basis.is_none() {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             flex_grow: grow.unwrap_or(NonNegativeNumber::new(1.0)),
@@ -1459,10 +1332,10 @@ pub mod place_content {
     use super::*;
     use crate::values::specified::align::ContentDistribution;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let align_content = ContentDistribution::parse_block(context, input)?;
         let justify_content =
             input.try_parse(|input| ContentDistribution::parse_inline(context, input));
@@ -1505,10 +1378,10 @@ pub mod place_self {
     use super::*;
     use crate::values::specified::align::SelfAlignment;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let align = SelfAlignment::parse_block(context, input)?;
         let justify = input.try_parse(|input| SelfAlignment::parse_inline(context, input));
 
@@ -1547,14 +1420,14 @@ pub mod place_items {
     use super::*;
     use crate::values::specified::align::{ItemPlacement, JustifyItems};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let align = ItemPlacement::parse_block(context, input)?;
         let justify = input
             .try_parse(|input| ItemPlacement::parse_inline(context, input))
-            .unwrap_or_else(|_| align.clone());
+            .unwrap_or(align);
 
         Ok(expanded! {
             align_items: align,
@@ -1581,13 +1454,13 @@ pub mod grid_row {
     pub use crate::properties::generated::shorthands::grid_row::*;
 
     use super::*;
-    use crate::values::specified::GridLine;
     use crate::Zero;
+    use crate::values::specified::GridLine;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let start = input.try_parse(|i| GridLine::parse(context, i))?;
         let end = if input.try_parse(|i| i.expect_delim('/')).is_ok() {
             GridLine::parse(context, input)?
@@ -1625,13 +1498,13 @@ pub mod grid_column {
     pub use crate::properties::generated::shorthands::grid_column::*;
 
     use super::*;
-    use crate::values::specified::GridLine;
     use crate::Zero;
+    use crate::values::specified::GridLine;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let start = input.try_parse(|i| GridLine::parse(context, i))?;
         let end = if input.try_parse(|i| i.expect_delim('/')).is_ok() {
             GridLine::parse(context, input)?
@@ -1669,13 +1542,13 @@ pub mod grid_area {
     pub use crate::properties::generated::shorthands::grid_area::*;
 
     use super::*;
-    use crate::values::specified::GridLine;
     use crate::Zero;
+    use crate::values::specified::GridLine;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         fn line_with_ident_from(other: &GridLine) -> GridLine {
             let mut this = GridLine::auto();
             if other.line_num.is_zero() && !other.is_span {
@@ -1755,16 +1628,11 @@ pub mod position_try {
     use super::*;
     use crate::values::specified::position::{PositionTryFallbacks, PositionTryOrder};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
-        let order =
-            if static_prefs::pref!("layout.css.anchor-positioning.position-try-order.enabled") {
-                input.try_parse(PositionTryOrder::parse).ok()
-            } else {
-                None
-            };
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
+        let order = input.try_parse(PositionTryOrder::parse).ok();
         let fallbacks = PositionTryFallbacks::parse(context, input)?;
         Ok(expanded! {
             position_try_order: order.unwrap_or(PositionTryOrder::normal()),
@@ -1777,40 +1645,13 @@ pub mod position_try {
         where
             W: fmt::Write,
         {
-            if let Some(o) = self.position_try_order {
-                if *o != PositionTryOrder::Normal {
-                    o.to_css(dest)?;
-                    dest.write_char(' ')?;
-                }
+            if !self.position_try_order.is_normal() {
+                self.position_try_order.to_css(dest)?;
+                dest.write_char(' ')?;
             }
             self.position_try_fallbacks.to_css(dest)
         }
     }
-}
-
-#[cfg(feature = "gecko")]
-fn timeline_to_css<W>(
-    name: &[specified::TimelineName],
-    axes: &[specified::ScrollAxis],
-    dest: &mut CssWriter<W>,
-) -> fmt::Result
-where
-    W: fmt::Write,
-{
-    if name.len() != axes.len() {
-        return Ok(());
-    }
-    for (i, (name, axis)) in std::iter::zip(name.iter(), axes.iter()).enumerate() {
-        if i != 0 {
-            dest.write_str(", ")?;
-        }
-        name.to_css(dest)?;
-        if !axis.is_default() {
-            dest.write_char(' ')?;
-            axis.to_css(dest)?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(feature = "gecko")]
@@ -1820,10 +1661,10 @@ pub mod scroll_timeline {
     use super::*;
     use crate::properties::longhands::{scroll_timeline_axis, scroll_timeline_name};
 
-    pub fn parse_value<'i>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut names = Vec::with_capacity(1);
         let mut axes = Vec::with_capacity(1);
         input.parse_comma_separated(|input| {
@@ -1847,11 +1688,25 @@ pub mod scroll_timeline {
         where
             W: fmt::Write,
         {
-            super::timeline_to_css(
-                &self.scroll_timeline_name.0,
-                &self.scroll_timeline_axis.0,
-                dest,
-            )
+            if self.scroll_timeline_name.0.len() != self.scroll_timeline_axis.0.len() {
+                return Ok(());
+            }
+            let mut first = true;
+            for (name, axis) in std::iter::zip(
+                self.scroll_timeline_name.0.iter(),
+                self.scroll_timeline_axis.0.iter(),
+            ) {
+                if !first {
+                    dest.write_str(", ")?;
+                }
+                name.to_css(dest)?;
+                if !axis.is_default() {
+                    dest.write_char(' ')?;
+                    axis.to_css(dest)?;
+                }
+                first = false;
+            }
+            Ok(())
         }
     }
 }
@@ -1861,20 +1716,41 @@ pub mod view_timeline {
     pub use crate::properties::generated::shorthands::view_timeline::*;
 
     use super::*;
-    use crate::properties::longhands::{view_timeline_axis, view_timeline_name};
+    use crate::properties::longhands::{
+        view_timeline_axis, view_timeline_inset, view_timeline_name,
+    };
 
-    pub fn parse_value<'i>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut names = Vec::with_capacity(1);
         let mut axes = Vec::with_capacity(1);
+        let mut insets = Vec::with_capacity(1);
         input.parse_comma_separated(|input| {
             let name = view_timeline_name::single_value::parse(context, input)?;
-            let axis = input.try_parse(|i| view_timeline_axis::single_value::parse(context, i));
+            let mut axis = None;
+            let mut inset = None;
+
+            loop {
+                try_parse_one!(
+                    context,
+                    input,
+                    axis,
+                    view_timeline_axis::single_value::parse
+                );
+                try_parse_one!(
+                    context,
+                    input,
+                    inset,
+                    view_timeline_inset::single_value::parse
+                );
+                break;
+            }
 
             names.push(name);
             axes.push(axis.unwrap_or_default());
+            insets.push(inset.unwrap_or_default());
 
             Ok(())
         })?;
@@ -1882,6 +1758,7 @@ pub mod view_timeline {
         Ok(expanded! {
             view_timeline_name: view_timeline_name::SpecifiedValue(names.into()),
             view_timeline_axis: view_timeline_axis::SpecifiedValue(axes.into()),
+            view_timeline_inset: view_timeline_inset::SpecifiedValue(insets.into()),
         })
     }
 
@@ -1890,7 +1767,33 @@ pub mod view_timeline {
         where
             W: fmt::Write,
         {
-            super::timeline_to_css(&self.view_timeline_name.0, &self.view_timeline_axis.0, dest)
+            use itertools::izip;
+            if self.view_timeline_name.0.len() != self.view_timeline_axis.0.len()
+                || self.view_timeline_name.0.len() != self.view_timeline_inset.0.len()
+            {
+                return Ok(());
+            }
+            let mut first = true;
+            for (name, axis, inset) in izip!(
+                self.view_timeline_name.0.iter(),
+                self.view_timeline_axis.0.iter(),
+                self.view_timeline_inset.0.iter(),
+            ) {
+                if !first {
+                    dest.write_str(", ")?;
+                }
+                name.to_css(dest)?;
+                if !axis.is_default() {
+                    dest.write_char(' ')?;
+                    axis.to_css(dest)?;
+                }
+                if !inset.is_auto() {
+                    dest.write_char(' ')?;
+                    inset.to_css(dest)?;
+                }
+                first = false;
+            }
+            Ok(())
         }
     }
 }
@@ -1903,10 +1806,10 @@ pub mod animation_range {
     use crate::properties::longhands::{animation_range_end, animation_range_start};
     use crate::values::specified::LengthPercentage;
 
-    pub fn parse_value<'i>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut starts = Vec::with_capacity(1);
         let mut ends = Vec::with_capacity(1);
         input.parse_comma_separated(|input| {
@@ -1983,10 +1886,10 @@ pub mod transition {
     };
     use crate::values::specified::TransitionProperty;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         struct SingleTransition {
             transition_property: transition_property::SingleSpecifiedValue,
             transition_duration: transition_duration::SingleSpecifiedValue,
@@ -1995,11 +1898,11 @@ pub mod transition {
             transition_behavior: transition_behavior::SingleSpecifiedValue,
         }
 
-        fn parse_one_transition<'i, 't>(
+        fn parse_one_transition(
             context: &ParserContext,
-            input: &mut Parser<'i, 't>,
+            input: &mut Parser,
             first: bool,
-        ) -> Result<SingleTransition, ParseError<'i>> {
+        ) -> Result<SingleTransition, ParseError> {
             let mut property = None;
             let mut duration = None;
             let mut timing_function = None;
@@ -2064,7 +1967,7 @@ pub mod transition {
                     ),
                 })
             } else {
-                Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError))
+                Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError))
             }
         }
 
@@ -2072,7 +1975,7 @@ pub mod transition {
         let mut has_transition_property_none = false;
         let results = input.parse_comma_separated(|i| {
             if has_transition_property_none {
-                return Err(i.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
             let transition = parse_one_transition(context, i, first)?;
             first = false;
@@ -2169,10 +2072,10 @@ pub mod outline {
     use super::*;
     use crate::properties::longhands::{outline_color, outline_style, outline_width};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let _unused = context;
         let mut color = None;
         let mut style = None;
@@ -2187,7 +2090,7 @@ pub mod outline {
             break;
         }
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             outline_color: unwrap_or_initial!(outline_color, color),
@@ -2224,13 +2127,13 @@ pub mod background_position {
 
     use super::*;
     use crate::properties::longhands::{background_position_x, background_position_y};
-    use crate::values::specified::position::Position;
     use crate::values::specified::AllowQuirks;
+    use crate::values::specified::position::Position;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut position_x = Vec::with_capacity(1);
         let mut position_y = Vec::with_capacity(1);
         let mut any = false;
@@ -2243,7 +2146,7 @@ pub mod background_position {
             Ok(())
         })?;
         if !any {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         Ok(expanded! {
@@ -2293,30 +2196,10 @@ pub mod background {
     };
     use crate::values::specified::{AllowQuirks, Color, Position, PositionComponent};
 
-    impl From<background_origin::single_value::SpecifiedValue>
-        for background_clip::single_value::SpecifiedValue
-    {
-        fn from(
-            origin: background_origin::single_value::SpecifiedValue,
-        ) -> background_clip::single_value::SpecifiedValue {
-            match origin {
-                background_origin::single_value::SpecifiedValue::ContentBox => {
-                    background_clip::single_value::SpecifiedValue::ContentBox
-                },
-                background_origin::single_value::SpecifiedValue::PaddingBox => {
-                    background_clip::single_value::SpecifiedValue::PaddingBox
-                },
-                background_origin::single_value::SpecifiedValue::BorderBox => {
-                    background_clip::single_value::SpecifiedValue::BorderBox
-                },
-            }
-        }
-    }
-
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut background_color = None;
 
         let mut background_image = Vec::with_capacity(1);
@@ -2329,7 +2212,7 @@ pub mod background {
         let mut background_clip = Vec::with_capacity(1);
         input.parse_comma_separated(|input| {
             if background_color.is_some() {
-                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
 
             let mut image = None;
@@ -2343,21 +2226,21 @@ pub mod background {
             loop {
                 parsed += 1;
                 try_parse_one!(context, input, background_color, Color::parse);
-                if position.is_none() {
-                    if let Ok(value) = input.try_parse(|input| {
+                if position.is_none()
+                    && let Ok(value) = input.try_parse(|input| {
                         Position::parse_three_value_quirky(context, input, AllowQuirks::No)
-                    }) {
-                        position = Some(value);
+                    })
+                {
+                    position = Some(value);
 
-                        size = input
-                            .try_parse(|input| {
-                                input.expect_delim('/')?;
-                                background_size::single_value::parse(context, input)
-                            })
-                            .ok();
+                    size = input
+                        .try_parse(|input| {
+                            input.expect_delim('/')?;
+                            background_size::single_value::parse(context, input)
+                        })
+                        .ok();
 
-                        continue;
-                    }
+                    continue;
                 }
                 try_parse_one!(context, input, image, background_image::single_value::parse);
                 try_parse_one!(
@@ -2383,12 +2266,12 @@ pub mod background {
                 break;
             }
             if parsed == 0 {
-                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
-            if clip.is_none() {
-                if let Some(origin) = origin {
-                    clip = Some(background_clip::single_value::SpecifiedValue::from(origin));
-                }
+            if clip.is_none()
+                && let Some(origin) = origin
+            {
+                clip = Some(background_clip::single_value::SpecifiedValue::from(origin));
             }
             if let Some(position) = position {
                 background_position_x.push(position.horizontal);
@@ -2532,10 +2415,10 @@ pub mod background {
                     }
                 }
 
-                if i == len - 1 {
-                    if *self.background_color != background_color::get_initial_specified_value() {
-                        writer.item(self.background_color)?;
-                    }
+                if i == len - 1
+                    && *self.background_color != background_color::get_initial_specified_value()
+                {
+                    writer.item(self.background_color)?;
                 }
 
                 if !writer.has_written() {
@@ -2552,45 +2435,43 @@ pub mod font {
     pub use crate::properties::generated::shorthands::font::*;
 
     use super::*;
-    #[cfg(feature = "gecko")]
     use crate::properties::longhands::{
-        font_family, font_size, font_size_adjust, font_variant_emoji,
-    };
-    use crate::properties::longhands::{
-        font_feature_settings, font_kerning, font_language_override, font_optical_sizing,
-        font_stretch, font_style, font_variant_alternates, font_variant_caps,
+        font_family, font_feature_settings, font_kerning, font_language_override,
+        font_optical_sizing, font_size, font_style, font_variant_alternates, font_variant_caps,
         font_variant_east_asian, font_variant_ligatures, font_variant_numeric,
-        font_variant_position, font_variation_settings, font_weight,
+        font_variant_position, font_variation_settings, font_weight, font_width,
     };
     #[cfg(feature = "gecko")]
+    use crate::properties::longhands::{font_size_adjust, font_variant_emoji};
     use crate::values::specified::font::SystemFont;
     use crate::values::specified::font::{
-        FontFamily, FontSize, FontStretch, FontStretchKeyword, FontStyle, FontWeight, LineHeight,
+        FontFamily, FontSize, FontStyle, FontWeight, FontWidth, FontWidthKeyword, LineHeight,
     };
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut nb_normals = 0;
         let mut style = None;
         let mut variant_caps = None;
         let mut weight = None;
-        let mut stretch = None;
-        #[cfg(feature = "gecko")]
+        let mut width = None;
         if let Ok(sys) = input.try_parse(|i| SystemFont::parse(context, i)) {
             return Ok(Longhands {
                 font_family: font_family::SpecifiedValue::system_font(sys),
                 font_size: font_size::SpecifiedValue::system_font(sys),
                 font_style: font_style::SpecifiedValue::system_font(sys),
-                font_stretch: font_stretch::SpecifiedValue::system_font(sys),
+                font_width: font_width::SpecifiedValue::system_font(sys),
                 font_weight: font_weight::SpecifiedValue::system_font(sys),
                 line_height: LineHeight::normal(),
                 font_kerning: font_kerning::get_initial_specified_value(),
                 font_language_override: font_language_override::get_initial_specified_value(),
+                #[cfg(feature = "gecko")]
                 font_size_adjust: font_size_adjust::get_initial_specified_value(),
                 font_variant_alternates: font_variant_alternates::get_initial_specified_value(),
                 font_variant_east_asian: font_variant_east_asian::get_initial_specified_value(),
+                #[cfg(feature = "gecko")]
                 font_variant_emoji: font_variant_emoji::get_initial_specified_value(),
                 font_variant_ligatures: font_variant_ligatures::get_initial_specified_value(),
                 font_variant_numeric: font_variant_numeric::get_initial_specified_value(),
@@ -2613,16 +2494,15 @@ pub mod font {
             }
             try_parse_one!(context, input, style, font_style::parse);
             try_parse_one!(context, input, weight, font_weight::parse);
-            if variant_caps.is_none() {
-                if input
+            if variant_caps.is_none()
+                && input
                     .try_parse(|input| input.expect_ident_matching("small-caps"))
                     .is_ok()
-                {
-                    variant_caps = Some(font_variant_caps::SpecifiedValue::SmallCaps);
-                    continue;
-                }
+            {
+                variant_caps = Some(font_variant_caps::SpecifiedValue::SmallCaps);
+                continue;
             }
-            try_parse_one!(input, stretch, FontStretchKeyword::parse);
+            try_parse_one!(input, width, FontWidthKeyword::parse);
             size = FontSize::parse(context, input)?;
             break;
         }
@@ -2635,25 +2515,20 @@ pub mod font {
 
         #[inline]
         fn count<T>(opt: &Option<T>) -> u8 {
-            if opt.is_some() {
-                1
-            } else {
-                0
-            }
+            if opt.is_some() { 1 } else { 0 }
         }
 
-        if (count(&style) + count(&weight) + count(&variant_caps) + count(&stretch) + nb_normals)
-            > 4
+        if (count(&style) + count(&weight) + count(&variant_caps) + count(&width) + nb_normals) > 4
         {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         let family = FontFamily::parse(context, input)?;
-        let stretch = stretch.map(FontStretch::Keyword);
+        let width = width.map(FontWidth::Keyword);
         Ok(Longhands {
             font_style: unwrap_or_initial!(font_style, style),
             font_weight: unwrap_or_initial!(font_weight, weight),
-            font_stretch: unwrap_or_initial!(font_stretch, stretch),
+            font_width: unwrap_or_initial!(font_width, width),
             font_variant_caps: unwrap_or_initial!(font_variant_caps, variant_caps),
             font_size: size,
             line_height: line_height.unwrap_or(LineHeight::normal()),
@@ -2675,7 +2550,6 @@ pub mod font {
         })
     }
 
-    #[cfg(feature = "gecko")]
     enum CheckSystemResult {
         AllSystem(SystemFont),
         SomeSystem,
@@ -2687,28 +2561,37 @@ pub mod font {
         where
             W: fmt::Write,
         {
-            #[cfg(feature = "gecko")]
             match self.check_system() {
                 CheckSystemResult::AllSystem(sys) => return sys.to_css(dest),
                 CheckSystemResult::SomeSystem => return Ok(()),
                 CheckSystemResult::None => {},
             }
 
+            #[cfg(feature = "gecko")]
+            if self.font_optical_sizing != &font_optical_sizing::get_initial_specified_value() {
+                return Ok(());
+            }
+            #[cfg(feature = "servo")]
             if let Some(v) = self.font_optical_sizing {
                 if v != &font_optical_sizing::get_initial_specified_value() {
                     return Ok(());
                 }
             }
+            #[cfg(feature = "gecko")]
+            if self.font_variation_settings
+                != &font_variation_settings::get_initial_specified_value()
+            {
+                return Ok(());
+            }
+            #[cfg(feature = "servo")]
             if let Some(v) = self.font_variation_settings {
                 if v != &font_variation_settings::get_initial_specified_value() {
                     return Ok(());
                 }
             }
             #[cfg(feature = "gecko")]
-            if let Some(v) = self.font_variant_emoji {
-                if v != &font_variant_emoji::get_initial_specified_value() {
-                    return Ok(());
-                }
+            if self.font_variant_emoji != &font_variant_emoji::get_initial_specified_value() {
+                return Ok(());
             }
 
             if self.font_kerning != &font_kerning::get_initial_specified_value() {
@@ -2746,19 +2629,19 @@ pub mod font {
                 return Ok(());
             }
 
-            let font_stretch = match self.font_stretch {
-                FontStretch::Keyword(kw) => *kw,
-                FontStretch::Stretch(percentage) => {
+            let font_width = match self.font_width {
+                FontWidth::Keyword(kw) => *kw,
+                FontWidth::Width(percentage) => {
                     let computed = match percentage.compute() {
                         Some(v) => v,
                         None => return Ok(()),
                     };
-                    match FontStretchKeyword::from_percentage(computed.0) {
+                    match FontWidthKeyword::from_percentage(computed.0) {
                         Some(kw) => kw,
                         None => return Ok(()),
                     }
                 },
-                FontStretch::System(..) => return Ok(()),
+                FontWidth::System(..) => return Ok(()),
             };
 
             if self.font_variant_caps != &font_variant_caps::get_initial_specified_value()
@@ -2783,8 +2666,8 @@ pub mod font {
                 dest.write_char(' ')?;
             }
 
-            if font_stretch != FontStretchKeyword::Normal {
-                font_stretch.to_css(dest)?;
+            if font_width != FontWidthKeyword::Normal {
+                font_width.to_css(dest)?;
                 dest.write_char(' ')?;
             }
 
@@ -2803,7 +2686,6 @@ pub mod font {
     }
 
     impl<'a> LonghandsToSerialize<'a> {
-        #[cfg(feature = "gecko")]
         fn check_system(&self) -> CheckSystemResult {
             let mut sys = None;
             let mut all = true;
@@ -2827,7 +2709,7 @@ pub mod font {
                 self.font_family,
                 self.font_size,
                 self.font_style,
-                self.font_stretch,
+                self.font_width,
                 self.font_weight
             );
 
@@ -2847,7 +2729,7 @@ pub mod font {
     impl SpecifiedValueInfo for Longhands {
         const SUPPORTED_TYPES: u8 = FontStyle::SUPPORTED_TYPES
             | FontWeight::SUPPORTED_TYPES
-            | FontStretch::SUPPORTED_TYPES
+            | FontWidth::SUPPORTED_TYPES
             | font_variant_caps::SpecifiedValue::SUPPORTED_TYPES
             | FontSize::SUPPORTED_TYPES
             | FontFamily::SUPPORTED_TYPES;
@@ -2855,12 +2737,10 @@ pub mod font {
         fn collect_completion_keywords(f: KeywordsCollectFn) {
             FontStyle::collect_completion_keywords(f);
             FontWeight::collect_completion_keywords(f);
-            FontStretch::collect_completion_keywords(f);
+            FontWidth::collect_completion_keywords(f);
             font_variant_caps::SpecifiedValue::collect_completion_keywords(f);
             FontSize::collect_completion_keywords(f);
             FontFamily::collect_completion_keywords(f);
-
-            #[cfg(feature = "gecko")]
             SystemFont::collect_completion_keywords(f);
         }
     }
@@ -2878,10 +2758,10 @@ pub mod font_variant {
     };
     use crate::values::specified::FontVariantLigatures;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut ligatures = None;
         let mut caps = None;
         let mut alternates = None;
@@ -2911,7 +2791,7 @@ pub mod font_variant {
                         .try_parse(|input| input.expect_ident_matching("none"))
                         .is_ok()
                 {
-                    return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                    return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
                 }
                 try_parse_one!(context, input, ligatures, font_variant_ligatures::parse);
                 try_parse_one!(context, input, caps, font_variant_caps::parse);
@@ -2926,7 +2806,7 @@ pub mod font_variant {
             }
 
             if parsed == 0 {
-                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
         }
 
@@ -2981,13 +2861,7 @@ pub mod font_variant {
             count_normal!(font_variant_east_asian);
             count_normal!(font_variant_position);
             #[cfg(feature = "gecko")]
-            if let Some(value) = self.font_variant_emoji {
-                if value == &font_variant_emoji::get_initial_specified_value() {
-                    nb_normals += 1;
-                }
-            } else {
-                nb_normals += 1;
-            }
+            count_normal!(font_variant_emoji);
 
             if nb_normals == TOTAL_SUBPROPS {
                 return dest.write_str("normal");
@@ -3018,9 +2892,7 @@ pub mod font_variant {
             write!(font_variant_east_asian);
             write!(font_variant_position);
             #[cfg(feature = "gecko")]
-            if let Some(v) = self.font_variant_emoji {
-                write!(v, font_variant_emoji);
-            }
+            write!(font_variant_emoji);
             Ok(())
         }
     }
@@ -3033,18 +2905,18 @@ pub mod font_synthesis {
     use super::*;
     use crate::values::specified::{FontSynthesis, FontSynthesisStyle};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         _context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut weight = FontSynthesis::None;
         let mut style = FontSynthesisStyle::None;
         let mut small_caps = FontSynthesis::None;
         let mut position = FontSynthesis::None;
 
-        if !input
+        if input
             .try_parse(|input| input.expect_ident_matching("none"))
-            .is_ok()
+            .is_err()
         {
             let mut has_custom_value = false;
             while !input.is_exhausted() {
@@ -3077,7 +2949,7 @@ pub mod font_synthesis {
                 }
             }
             if !has_custom_value {
-                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
         }
 
@@ -3141,10 +3013,10 @@ pub mod text_box {
     use super::*;
     use crate::values::specified::{TextBoxEdge, TextBoxTrim};
 
-    pub fn parse_value<'i>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, '_>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut trim = None;
         let mut edge = None;
 
@@ -3165,7 +3037,7 @@ pub mod text_box {
         }
 
         if trim.is_none() && edge.is_none() {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         // From https://drafts.csswg.org/css-inline-3/#text-box-shorthand:
@@ -3210,10 +3082,10 @@ pub mod text_emphasis {
     use super::*;
     use crate::properties::longhands::{text_emphasis_color, text_emphasis_style};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut color = None;
         let mut style = None;
         let mut parsed = 0;
@@ -3225,7 +3097,7 @@ pub mod text_emphasis {
             break;
         }
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(expanded! {
             text_emphasis_color: unwrap_or_initial!(text_emphasis_color, color),
@@ -3243,10 +3115,10 @@ pub mod text_decoration {
         text_decoration_color, text_decoration_line, text_decoration_style,
     };
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut line = None;
         let mut style = None;
         let mut color = None;
@@ -3264,15 +3136,15 @@ pub mod text_decoration {
         }
 
         if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
-        return Ok(expanded! {
+        Ok(expanded! {
             text_decoration_line: unwrap_or_initial!(text_decoration_line, line),
             text_decoration_style: unwrap_or_initial!(text_decoration_style, style),
             text_decoration_color: unwrap_or_initial!(text_decoration_color, color),
             text_decoration_thickness: unwrap_or_initial!(text_decoration_thickness, thickness),
-        });
+        })
     }
 
     impl<'a> ToCss for LonghandsToSerialize<'a> {
@@ -3318,10 +3190,10 @@ pub mod animation {
         animation_range_start, animation_timeline, animation_timing_function,
     };
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         struct SingleAnimation {
             animation_name: animation_name::SingleSpecifiedValue,
             animation_duration: animation_duration::SingleSpecifiedValue,
@@ -3333,10 +3205,10 @@ pub mod animation {
             animation_play_state: animation_play_state::SingleSpecifiedValue,
         }
 
-        fn parse_one_animation<'i, 't>(
+        fn parse_one_animation(
             context: &ParserContext,
-            input: &mut Parser<'i, 't>,
-        ) -> Result<SingleAnimation, ParseError<'i>> {
+            input: &mut Parser,
+        ) -> Result<SingleAnimation, ParseError> {
             let mut name = None;
             let mut duration = None;
             let mut timing_function = None;
@@ -3392,7 +3264,7 @@ pub mod animation {
             }
 
             if parsed == 0 {
-                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
             Ok(SingleAnimation {
                 animation_name: name
@@ -3467,11 +3339,11 @@ pub mod animation {
         where
             W: fmt::Write,
         {
+            use crate::Zero;
             use crate::values::specified::easing::TimingFunction;
             use crate::values::specified::{
                 AnimationDirection, AnimationFillMode, AnimationPlayState,
             };
-            use crate::Zero;
             use style_traits::values::SequenceWriter;
 
             let len = self.animation_name.0.len();
@@ -3505,19 +3377,19 @@ pub mod animation {
             // if any of them are not the initial value.
             if self
                 .animation_timeline
-                .map_or(false, |v| v.0.len() != 1 || !v.0[0].is_auto())
+                .is_some_and(|v| v.0.len() != 1 || !v.0[0].is_auto())
             {
                 return Ok(());
             }
             if self
                 .animation_range_start
-                .map_or(false, |v| v.0.len() != 1 || !v.0[0].0.is_normal())
+                .is_some_and(|v| v.0.len() != 1 || !v.0[0].0.is_normal())
             {
                 return Ok(());
             }
             if self
                 .animation_range_end
-                .map_or(false, |v| v.0.len() != 1 || !v.0[0].0.is_normal())
+                .is_some_and(|v| v.0.len() != 1 || !v.0[0].0.is_normal())
             {
                 return Ok(());
             }
@@ -3591,40 +3463,10 @@ pub mod mask {
     use crate::properties::longhands::{mask_image, mask_size};
     use crate::values::specified::{Position, PositionComponent};
 
-    impl From<mask_origin::single_value::SpecifiedValue> for mask_clip::single_value::SpecifiedValue {
-        fn from(
-            origin: mask_origin::single_value::SpecifiedValue,
-        ) -> mask_clip::single_value::SpecifiedValue {
-            match origin {
-                mask_origin::single_value::SpecifiedValue::ContentBox => {
-                    mask_clip::single_value::SpecifiedValue::ContentBox
-                },
-                mask_origin::single_value::SpecifiedValue::PaddingBox => {
-                    mask_clip::single_value::SpecifiedValue::PaddingBox
-                },
-                mask_origin::single_value::SpecifiedValue::BorderBox => {
-                    mask_clip::single_value::SpecifiedValue::BorderBox
-                },
-                #[cfg(feature = "gecko")]
-                mask_origin::single_value::SpecifiedValue::FillBox => {
-                    mask_clip::single_value::SpecifiedValue::FillBox
-                },
-                #[cfg(feature = "gecko")]
-                mask_origin::single_value::SpecifiedValue::StrokeBox => {
-                    mask_clip::single_value::SpecifiedValue::StrokeBox
-                },
-                #[cfg(feature = "gecko")]
-                mask_origin::single_value::SpecifiedValue::ViewBox => {
-                    mask_clip::single_value::SpecifiedValue::ViewBox
-                },
-            }
-        }
-    }
-
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut mask_image = Vec::with_capacity(1);
         let mut mask_mode = Vec::with_capacity(1);
         let mut mask_position_x = Vec::with_capacity(1);
@@ -3649,18 +3491,18 @@ pub mod mask {
                 parsed += 1;
 
                 try_parse_one!(context, input, image, mask_image::single_value::parse);
-                if position.is_none() {
-                    if let Ok(value) = input.try_parse(|input| Position::parse(context, input)) {
-                        position = Some(value);
-                        size = input
-                            .try_parse(|input| {
-                                input.expect_delim('/')?;
-                                mask_size::single_value::parse(context, input)
-                            })
-                            .ok();
+                if position.is_none()
+                    && let Ok(value) = input.try_parse(|input| Position::parse(context, input))
+                {
+                    position = Some(value);
+                    size = input
+                        .try_parse(|input| {
+                            input.expect_delim('/')?;
+                            mask_size::single_value::parse(context, input)
+                        })
+                        .ok();
 
-                        continue;
-                    }
+                    continue;
                 }
                 try_parse_one!(context, input, repeat, mask_repeat::single_value::parse);
                 try_parse_one!(context, input, origin, mask_origin::single_value::parse);
@@ -3676,13 +3518,13 @@ pub mod mask {
                 parsed -= 1;
                 break;
             }
-            if clip.is_none() {
-                if let Some(origin) = origin {
-                    clip = Some(mask_clip::single_value::SpecifiedValue::from(origin));
-                }
+            if clip.is_none()
+                && let Some(origin) = origin
+            {
+                clip = Some(mask_clip::single_value::SpecifiedValue::from(origin));
             }
             if parsed == 0 {
-                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
             }
             if let Some(position) = position {
                 mask_position_x.push(position.horizontal);
@@ -3879,10 +3721,10 @@ pub mod mask_position {
     use crate::properties::longhands::{mask_position_x, mask_position_y};
     use crate::values::specified::Position;
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         // Vec grows from 0 to 4 by default on first push().  So allocate with capacity 1, so in
         // the common case of only one item we don't way overallocate, then shrink.  Note that we
         // always push at least one item if parsing succeeds.
@@ -3896,7 +3738,7 @@ pub mod mask_position {
         })?;
 
         if position_x.is_empty() {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
         Ok(expanded! {
@@ -3937,8 +3779,8 @@ pub mod grid_template {
 
     use super::*;
     use crate::parser::Parse;
-    use crate::values::generics::grid::{concat_serialize_idents, TrackListValue};
     use crate::values::generics::grid::{TrackList, TrackSize};
+    use crate::values::generics::grid::{TrackListValue, concat_serialize_idents};
     use crate::values::specified::grid::parse_line_names;
     use crate::values::specified::position::{
         GridTemplateAreas, TemplateAreasArc, TemplateAreasParser,
@@ -3946,16 +3788,16 @@ pub mod grid_template {
     use crate::values::specified::{GenericGridTemplateComponent, GridTemplateComponent};
     use servo_arc::Arc;
 
-    pub fn parse_grid_template<'i, 't>(
+    pub fn parse_grid_template(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
+        input: &mut Parser,
     ) -> Result<
         (
             GridTemplateComponent,
             GridTemplateComponent,
             GridTemplateAreas,
         ),
-        ParseError<'i>,
+        ParseError,
     > {
         if let Ok(x) = input.try_parse(|i| {
             if i.try_parse(|i| i.expect_ident_matching("none")).is_ok() {
@@ -3991,7 +3833,7 @@ pub mod grid_template {
                     Ok(()) => {
                         if let Ok(v) = more_names {
                             let mut names_vec = names.into_vec();
-                            names_vec.extend(v.into_iter());
+                            names_vec.extend(v);
                             names = names_vec.into();
                         }
                         line_names.push(names);
@@ -4012,19 +3854,19 @@ pub mod grid_template {
 
             let template_areas = areas_parser
                 .finish()
-                .map_err(|()| input.new_custom_error(StyleParseErrorKind::UnspecifiedError))?;
+                .map_err(|()| ParseError::custom(StyleParseErrorKind::UnspecifiedError))?;
             let template_rows = TrackList {
                 values: values.into(),
                 line_names: line_names.into(),
-                auto_repeat_index: std::usize::MAX,
+                auto_repeat_index: usize::MAX,
             };
 
             let template_cols = if input.try_parse(|i| i.expect_delim('/')).is_ok() {
                 let value = GridTemplateComponent::parse_without_none(context, input)?;
-                if let GenericGridTemplateComponent::TrackList(ref list) = value {
-                    if !list.is_explicit() {
-                        return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                    }
+                if let GenericGridTemplateComponent::TrackList(ref list) = value
+                    && !list.is_explicit()
+                {
+                    return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
                 }
 
                 value
@@ -4043,7 +3885,7 @@ pub mod grid_template {
                 if list.line_names[0].is_empty() {
                     list.line_names[0] = first_line_names;
                 } else {
-                    return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                    return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
                 }
             }
 
@@ -4057,10 +3899,10 @@ pub mod grid_template {
     }
 
     #[inline]
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let (rows, columns, areas) = parse_grid_template(context, input)?;
         Ok(expanded! {
             grid_template_rows: rows,
@@ -4179,10 +4021,10 @@ pub mod grid {
     use crate::values::specified::position::{GridAutoFlow, GridTemplateAreas};
     use crate::values::specified::{GenericGridTemplateComponent, ImplicitGridTracks};
 
-    pub fn parse_value<'i, 't>(
+    pub fn parse_value(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Longhands, ParseError<'i>> {
+        input: &mut Parser,
+    ) -> Result<Longhands, ParseError> {
         let mut temp_rows = GridTemplateComponent::default();
         let mut temp_cols = GridTemplateComponent::default();
         let mut temp_areas = GridTemplateAreas::None;
@@ -4190,10 +4032,7 @@ pub mod grid {
         let mut auto_cols = ImplicitGridTracks::default();
         let mut flow = grid_auto_flow::get_initial_value();
 
-        fn parse_auto_flow<'i, 't>(
-            input: &mut Parser<'i, 't>,
-            is_row: bool,
-        ) -> Result<GridAutoFlow, ParseError<'i>> {
+        fn parse_auto_flow(input: &mut Parser, is_row: bool) -> Result<GridAutoFlow, ParseError> {
             let mut track = None;
             let mut dense = GridAutoFlow::empty();
 
@@ -4220,7 +4059,7 @@ pub mod grid {
             if track.is_some() {
                 Ok(track.unwrap() | dense)
             } else {
-                Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError))
+                Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError))
             }
         }
 
@@ -4288,10 +4127,9 @@ pub mod grid {
                 }
 
                 if let GenericGridTemplateComponent::TrackList(ref list) = *self.grid_template_rows
+                    && !list.is_explicit()
                 {
-                    if !list.is_explicit() {
-                        return Ok(());
-                    }
+                    return Ok(());
                 }
 
                 self.grid_template_rows.to_css(dest)?;
@@ -4312,10 +4150,10 @@ pub mod grid {
                 return Ok(());
             }
 
-            if let GenericGridTemplateComponent::TrackList(ref list) = *self.grid_template_columns {
-                if !list.is_explicit() {
-                    return Ok(());
-                }
+            if let GenericGridTemplateComponent::TrackList(ref list) = *self.grid_template_columns
+                && !list.is_explicit()
+            {
+                return Ok(());
             }
 
             dest.write_str("auto-flow")?;

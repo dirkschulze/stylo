@@ -6,11 +6,12 @@
 
 use style_traits::owned_slice::OwnedSlice;
 
-use crate::color::mix::ColorInterpolationMethod;
 use crate::color::AbsoluteColor;
+use crate::color::mix::ColorInterpolationMethod;
 use crate::values::animated::{Animate, Procedure, ToAnimatedZero};
 use crate::values::computed::Percentage;
 use crate::values::distance::{ComputeSquaredDistance, SquaredDistance};
+use crate::values::generics::Optional;
 use crate::values::generics::color::{
     ColorMixFlags, GenericColor, GenericColorMix, GenericColorMixItem,
 };
@@ -72,11 +73,11 @@ impl Animate for Color {
             items: OwnedSlice::from_slice(&[
                 GenericColorMixItem {
                     color: self.clone(),
-                    percentage: Percentage(left_weight as f32),
+                    percentage: Optional::Some(Percentage(left_weight as f32)),
                 },
                 GenericColorMixItem {
                     color: other.clone(),
-                    percentage: Percentage(right_weight as f32),
+                    percentage: Optional::Some(Percentage(right_weight as f32)),
                 },
             ]),
             // See https://github.com/w3c/csswg-drafts/issues/7324
