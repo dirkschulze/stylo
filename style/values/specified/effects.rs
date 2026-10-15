@@ -7,8 +7,6 @@
 use crate::Zero;
 use crate::derives::*;
 use crate::parser::{Parse, ParserContext};
-#[cfg(feature = "servo")]
-use crate::values::Impossible;
 use crate::values::computed::Angle as ComputedAngle;
 use crate::values::computed::CSSPixelLength as ComputedCSSPixelLength;
 use crate::values::computed::Filter as ComputedFilter;
@@ -19,7 +17,6 @@ use crate::values::computed::NumberOrPercentage as ComputedNumberOrPercentage;
 use crate::values::computed::ZeroToOneNumber as ComputedZeroToOneNumber;
 use crate::values::computed::effects::BoxShadow as ComputedBoxShadow;
 use crate::values::computed::effects::SimpleShadow as ComputedSimpleShadow;
-#[cfg(feature = "gecko")]
 use crate::values::computed::url::ComputedUrl;
 use crate::values::computed::{Context, ToComputedValue};
 use crate::values::generics::effects::BoxShadow as GenericBoxShadow;
@@ -28,7 +25,6 @@ use crate::values::generics::effects::SimpleShadow as GenericSimpleShadow;
 use crate::values::generics::{NonNegative, ZeroToOne};
 use crate::values::specified::color::Color;
 use crate::values::specified::length::{Length, NonNegativeLength};
-#[cfg(feature = "gecko")]
 use crate::values::specified::url::SpecifiedUrl;
 use crate::values::specified::{Angle, NonNegativeNumberOrPercentage, Number, NumberOrPercentage};
 use cssparser::{Parser, match_ignore_ascii_case};
@@ -39,12 +35,7 @@ pub type BoxShadow =
     GenericBoxShadow<Option<Color>, Length, Option<NonNegativeLength>, Option<Length>>;
 
 /// A specified value for a single `filter`.
-#[cfg(feature = "gecko")]
 pub type SpecifiedFilter = GenericFilter<Angle, FilterFactor, Length, SimpleShadow, SpecifiedUrl>;
-
-/// A specified value for a single `filter`.
-#[cfg(feature = "servo")]
-pub type SpecifiedFilter = GenericFilter<Angle, FilterFactor, Length, SimpleShadow, Impossible>;
 
 pub use self::SpecifiedFilter as Filter;
 
@@ -280,7 +271,9 @@ impl Filter {
             #[cfg(feature = "gecko")]
             Filter::Url(ref url) => Ok(ComputedFilter::Url(ComputedUrl(url.clone()))),
             #[cfg(feature = "servo")]
-            Filter::Url(_) => Err(()),
+            Filter::Url(ref url) => Ok(ComputedFilter::Url(ComputedUrl::Valid(
+                url.url().ok_or(())?.clone(),
+            ))),
         }
     }
 }
@@ -288,11 +281,8 @@ impl Filter {
 impl Parse for Filter {
     #[inline]
     fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
-        #[cfg(feature = "gecko")]
-        {
-            if let Ok(url) = input.try_parse(|i| SpecifiedUrl::parse(context, i)) {
-                return Ok(GenericFilter::Url(url));
-            }
+        if let Ok(url) = input.try_parse(|i| SpecifiedUrl::parse(context, i)) {
+            return Ok(GenericFilter::Url(url));
         }
         let function = {
             let f = input.expect_function()?;
@@ -360,6 +350,47 @@ impl Parse for Filter {
                 _ => Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError)),
             }
         })
+    }
+}
+
+#[cfg(all(test, feature = "servo"))]
+mod servo_url_filter_tests {
+    use super::*;
+    use crate::context::QuirksMode;
+    use crate::stylesheets::{Origin, UrlExtraData};
+    use style_traits::ParsingMode;
+
+    fn parse(value: &str) -> Result<Filter, ()> {
+        let base = UrlExtraData::from(url::Url::parse("https://example.invalid/css/main.css").unwrap());
+        let context = ParserContext::new(
+            Origin::Author, &base, None, ParsingMode::DEFAULT,
+            QuirksMode::NoQuirks, Default::default(), None, None, Default::default(),
+        );
+        Parser::new(value).parse_entirely(|input| Filter::parse(&context, input)).map_err(|_| ())
+    }
+
+    #[test]
+    fn servo_url_filter_resolution_and_roundtrip() {
+        for (css, expected) in [
+            ("url(#filter)", "https://example.invalid/css/main.css#filter"),
+            ("url('../effects.svg#filter')", "https://example.invalid/effects.svg#filter"),
+            ("url(\"https://example.invalid/other.svg#f\")", "https://example.invalid/other.svg#f"),
+        ] {
+            let specified = parse(css).unwrap();
+            let computed = specified.to_computed_value_without_context().unwrap();
+            match &computed {
+                ComputedFilter::Url(url) => assert_eq!(url.url().unwrap().as_str(), expected),
+                _ => panic!("Expected a URL filter"),
+            }
+            assert_eq!(Filter::from_computed_value(&computed), specified);
+        }
+    }
+
+    #[test]
+    fn servo_url_filter_preserves_function_parsing() {
+        assert!(matches!(parse("blur(2px)").unwrap(), Filter::Blur(_)));
+        assert!(parse("url(#filter) blur(2px)").is_err());
+        assert!(parse("url('')").unwrap().to_computed_value_without_context().is_err());
     }
 }
 
